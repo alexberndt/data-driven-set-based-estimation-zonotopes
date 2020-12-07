@@ -80,9 +80,9 @@ C{3}    = [-0.8 0.2;
        
 % define bounds on v(k) using zonotopes
 c_v_meas     = cell(1,q);
-c_v_meas{1}  = 15.5;
-c_v_meas{2}  = 15.7;
-c_v_meas{3}  = 15.1;
+c_v_meas{1}  = 10.5;
+c_v_meas{2}  = 10.7;
+c_v_meas{3}  = 10.1;
 
 Z_v_meas     = cell(1,q);
 Z_v_meas{1}  = zonotope(0,c_v_meas{1});
