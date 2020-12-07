@@ -17,17 +17,17 @@ addpath('./functions/');
 %           0   0  0  0 -2];
       
 A_true = [0.9323 -0.189 0 0 0;
-      0.1890 0.9323 0 0 0;
-      0        0    0.8596 0.0430 0;
-      0        0    -0.0430  0.8596 0; 
-      0        0     0    0 0.9048];
+          0.1890 0.9323 0 0 0;
+          0        0    0.8596 0.0430 0;
+          0        0    -0.0430  0.8596 0; 
+          0        0     0    0 0.9048];
 % B_true = ones(5,1);
 nx = 5;
 
-T       = 2400;
+T       = 500;
 Ts      = 1.0;
 
-useRandPointExtreme = false;
+useRandPointExtreme = true;
 
 % init matrices
 x       = zeros(nx,T+1);
@@ -40,11 +40,11 @@ u       = zeros(1,T);
 
 % Z_X_0  = zonotope([0;0], blkdiag(10,10));
 % x(:,1)  = randPoint(Z_X_0);
-x(:,1)  = -100*ones(5,1);
+x(:,1)  = -1*ones(5,1);
 
 % define noise zonotopes
-c_gam       = 0.001;
-c_w         = 0.1;
+c_gam       = 0.0001;
+c_w         = 0.0001;
 Z_gamma     = zonotope( zeros(nx,1), c_gam*eye(nx) );
 Z_w         = zonotope( zeros(nx,1), c_w*eye(nx)  ); 
 
@@ -71,11 +71,11 @@ sysid_data = iddata(z',[],Ts);
 m = n4sid(sysid_data,5,'ssp','can'); % canonical form for C = eye(2)
 [pvec,pvec_sd] = getpvec(m);
 unc_stddev = reshape(pvec_sd,[nx,3*nx]);
-M_n4sid = intervalMatrix(m.A,2.9*unc_stddev(:,1:nx));
+M_n4sid = intervalMatrix(m.A,3*unc_stddev(:,1:nx));
 
 % IS the true A contained within the N4SID interval matrix?
-A_true > M_n4sid.Inf
-A_true < M_n4sid.Sup
+A_true > M_n4sid.Inf;
+A_true < M_n4sid.Sup;
 
 %% Zonotope identification
 Z_minus         = z(:,1:T-1);
@@ -133,7 +133,7 @@ Z_AV        = zonotope(interval(Z_min, Z_max));
 
 %% REACHABILITY
 x_start = [-1; -1; 0; 1; 0];
-z_start = zonotope(x_start,0.1*eye(nx));
+z_start = zonotope(x_start,[0.1*eye(nx) [0.1;0.05;0.05;0.05;0.01]]);
 % % z_start = zonotope([-10; 10],0.1*eye(2));
 z_n4sid = M_n4sid*z_start + Z_w; 
 z_true  = A_true*z_start + Z_w;
@@ -170,6 +170,8 @@ for i = 1:1
     z_zon = M_dash*(z_zon + Z_gamma) + Z_AV + Z_w;
 %     z_zon = reduce(z_zon,'girard',5);
 end
+
+legend('start','true','n4sid','zon');
 
 z_true_rad   = radius(z_true)
 z_zon_rad    = radius(z_zon)

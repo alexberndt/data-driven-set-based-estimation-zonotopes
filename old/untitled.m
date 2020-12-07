@@ -23,6 +23,14 @@ figure(1);
 plot(conZon, [1 2], 'b-');
 plot(conZon2, [1 2], 'r-');
 
+C = eye(2);
+G = cell(1,3);
+G{1} = [0.1 0; 0.1 0];
+G{2} = [0 0.1; 0.1 0];
+G{3} = [0.1 0; 0.1 0];
+
+matZonotope(C, G)
+
 % inter_zon = conZonotope(Z_x_y_i{3,idx});
 % 
 % for j = 1:q

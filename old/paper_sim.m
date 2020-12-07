@@ -26,10 +26,10 @@ addpath('./functions/');
 A_true  = [0.9455   -0.2426;
            0.2486    0.9455];
 % B_true  = [1; 0];
-T       = 1500;
+T       = 350;
 Ts      = 1.0;
 
-useRandPointExtreme = true;
+useRandPointExtreme = false;
 
 % init matrices
 x       = zeros(2,T+1);
@@ -48,7 +48,7 @@ x(:,1)  = [10.0;10.0];
 c_gam       = 0.01;
 c_w         = 0.01;
 Z_gamma     = zonotope( [0.0;0.0], blkdiag(c_gam, c_gam) );
-Z_w         = zonotope( [0.0;0.0], [c_w 0 0.5*c_w; 0 0.9*c_w -0.1*c_w] ); 
+Z_w         = zonotope( [0.0;0.0] ,blkdiag(c_w, c_w) ); % [c_w 0 0.2*c_w; 0 0.9*c_w -0.05*c_w] ); 
 
 % generate training data
 for k = 1:T
@@ -112,12 +112,13 @@ M_w         = matZonotope(C_w,G_w);
 % determine propogations matrices
 M_dash      = (Z_plus - C_gam - C_w)*pinv(Z_minus);
 M_AV        = Z_plus - M_dash*Z_minus + (-1)*M_w + (-1)*M_v;
-Int_Mat_AV   = intervalMatrix(M_AV);
+Int_Mat_AV  = intervalMatrix(M_AV);
 M_v_sup     = Int_Mat_AV.Sup;
 M_v_inf     = Int_Mat_AV.Inf;
 Z_max       = max(M_v_sup,[],2);
 Z_min       = min(M_v_inf,[],2);
 Z_AV        = zonotope(interval(Z_min, Z_max));
+   
 
 % % plot the results
 % figure(1);
@@ -176,7 +177,7 @@ Z_AV        = zonotope(interval(Z_min, Z_max));
 
 %% Run set-based observer
 
-N   = 10;
+N   = 15;
 nx  = 2;
 q   = 3;
 
@@ -184,20 +185,23 @@ q   = 3;
 C       = cell(1,q);
 C{1}    = [1 0.4];
 C{2}    = [0.9 -1.2];
-C{3}    = [0.4 0;
-           0 0.4];
+C{3}    = [-0.8 0.2;
+           0    0.7];
+% C{4}    = [0 0.7];
 % define bounds on v(k) using zonotopes
 c_v_meas     = cell(1,q);
-c_v_meas{1}  = 3.8;
-c_v_meas{2}  = 4.8;
-c_v_meas{3}  = 3.8;
+c_v_meas{1}  = 1.5;
+c_v_meas{2}  = 1.5;
+c_v_meas{3}  = 1.5;
+% c_v_meas{4}  = 1.9;
 Z_v_meas     = cell(1,q);
 Z_v_meas{1}  = zonotope(0,c_v_meas{1});
 Z_v_meas{2}  = zonotope(0,c_v_meas{2});
 Z_v_meas{3}  = zonotope([0;0],blkdiag(c_v_meas{3},c_v_meas{3}));
+% Z_v_meas{4}  = zonotope(2,c_v_meas{4});
 
 x       = zeros(nx,N+1);
-x(:,1)  = [-9;-8]; %randPointExtreme(Z_X_0);   %           % true initial condition
+x(:,1)  = [-9.9;-7]; %randPointExtreme(Z_X_0);   %           % true initial condition
 w       = zeros(nx,N);
 y       = cell(1,q);
 v       = cell(1,q);
@@ -232,7 +236,7 @@ Q = 15*c_w*eye(2);
 P = zeros(2,2,N+1);
 P(:,:,1) = [10 1; 1 10];
 
-x_hat(:,1)  = zeros(nx,1); % initial state estimate
+% x_hat(:,1)  = x(:,1); %zeros(nx,1); % initial state estimate
 y_meas      = zeros(q,N);
 x_hat_zon   = cell(1,N+1);
 
@@ -241,7 +245,7 @@ R = [];
 for j = 1:q
    C_n4sid      = [C_n4sid;C{j}];
    [p_i,~]      = size(C{j});
-   R = blkdiag(R,c_v_meas{j}*3*eye(p_i));
+   R = blkdiag(R,c_v_meas{j}*15*eye(p_i));
 end
 [sz,~]      = size(C_n4sid);
 K           = zeros(nx,sz,N);
@@ -269,62 +273,62 @@ for k = 1:N
         y{i}(:,k) = C{i}*x(:,k) + randPoint(Z_v_meas{i});
     end
     
-    %% ZONOTOPE SVD METHOD
-    disp(' - Zonotope SVD method');
-    x_est_svd_prev_z{k} = x_est_svd;
-    x_est_svd_prev      = x_est_svd;
-    
-    for i = 1:q
-        Z_x_y_i{i,k}   = measurement_zonotope(y{i}(:,k), C{i}, Z_v_meas{i});
-        meas_zonotope  = Z_x_y_i{i,k};
-        x_est_svd   = and(Z_x_y_i{i,k},x_est_svd);
-    end
-    x_est_svd_z{k}  = x_est_svd;
-
-    % propogate current state estimate
-    x_est_svd_kp1   = M_dash * (x_est_svd + Z_gamma) + Z_AV + Z_w;
-    x_est_svd       = reduce(x_est_svd_kp1,'girard',5);
-
-    %% CONZONOTOPE SVD METHOD
-    disp(' - ConZonotope SVD method');
-    x_est_svd_con_prev_z{k} = x_est_svd_con;
-    x_est_svd_con_prev      = x_est_svd_con;
-    
-    for i = 1:q
-        conZono_measurement = conZonotope(Z_x_y_i{i,k});
-        x_est_svd_con   = and(conZono_measurement,x_est_svd_con);
-    end
-    x_est_svd_con_z{k}  = x_est_svd_con;
-
-    x_est_svd_con_kp1   = M_dash * (x_est_svd_con + Z_gamma) + Z_AV + Z_w;
-    x_est_svd_con       = reduce(x_est_svd_con_kp1,'girard',5);
-    
-    %% ZONOTOPE OPT METHOD
-    disp(' - Zonotope OPT method');
-    x_est_opt_prev_z{k} = x_est_opt;
-    x_est_opt_prev      = x_est_opt;
-    
-    yl = {y{1}(:,k),y{2}(:,k),y{3}(:,k)};    
-    x_est_opt = intersectZonoZono(x_est_opt_prev,C,Z_v_meas,yl,'frobenius');
-    x_est_opt_z{k}  = x_est_opt;
-
-    % propogate current state estimate 
-    x_est_opt_kp1   = M_dash * (x_est_opt + Z_gamma) + Z_AV + Z_w;
-    x_est_opt       = reduce(x_est_opt_kp1,'girard',5);
-
-    %% CONZONOTOPE OPT METHOD
-    disp(' - ConZonotope OPT method');
-    x_est_opt_con_prev_z{k} = x_est_opt_con;
-    x_est_opt_con_prev      = x_est_opt_con;
-
-    yl = {y{1}(:,k),y{2}(:,k),y{3}(:,k)}; 
-    x_est_opt_con = intersectConZonoZono(x_est_opt_con,C,Z_v_meas,yl,'frobenius');
-    x_est_opt_con_z{k}  = x_est_opt_con;
-    
-    % propogate current state estimate 
-    x_est_opt_con_kp1   = M_dash * (x_est_opt_con + Z_gamma) + Z_AV + Z_w;
-    % x_est_opt_con       = x_est_opt_con_kp1;
-    x_est_opt_con       = reduce(x_est_opt_con_kp1,'girard',5);
+%     %% ZONOTOPE SVD METHOD
+%     disp(' - Zonotope SVD method');
+%     x_est_svd_prev_z{k} = x_est_svd;
+%     x_est_svd_prev      = x_est_svd;
+%     
+%     for i = 1:q
+%         Z_x_y_i{i,k}   = measurement_zonotope(y{i}(:,k), C{i}, Z_v_meas{i});
+%         meas_zonotope  = Z_x_y_i{i,k};
+%         x_est_svd   = and(Z_x_y_i{i,k},x_est_svd);
+%     end
+%     x_est_svd_z{k}  = x_est_svd;
+% 
+%     % propogate current state estimate
+%     x_est_svd_kp1   = M_dash * (x_est_svd + Z_gamma) + Z_AV + Z_w;
+%     x_est_svd       = reduce(x_est_svd_kp1,'girard',5);
+% 
+%     %% CONZONOTOPE SVD METHOD
+%     disp(' - ConZonotope SVD method');
+%     x_est_svd_con_prev_z{k} = x_est_svd_con;
+%     x_est_svd_con_prev      = x_est_svd_con;
+%     
+%     for i = 1:q
+%         conZono_measurement = conZonotope(Z_x_y_i{i,k});
+%         x_est_svd_con   = and(conZono_measurement,x_est_svd_con);
+%     end
+%     x_est_svd_con_z{k}  = x_est_svd_con;
+% 
+%     x_est_svd_con_kp1   = M_dash * (x_est_svd_con + Z_gamma) + Z_AV + Z_w;
+%     x_est_svd_con       = reduce(x_est_svd_con_kp1,'girard',5);
+%     
+%     %% ZONOTOPE OPT METHOD
+%     disp(' - Zonotope OPT method');
+%     x_est_opt_prev_z{k} = x_est_opt;
+%     x_est_opt_prev      = x_est_opt;
+%     
+%     yl = {y{1}(:,k), y{2}(:,k), y{3}(:,k) };    
+%     x_est_opt = intersectZonoZono(x_est_opt_prev,C,Z_v_meas,yl,'frobenius');
+%     x_est_opt_z{k}  = x_est_opt;
+% 
+%     % propogate current state estimate 
+%     x_est_opt_kp1   = M_dash * (x_est_opt + Z_gamma) + Z_AV + Z_w;
+%     x_est_opt       = reduce(x_est_opt_kp1,'girard',5);
+% 
+%     %% CONZONOTOPE OPT METHOD
+%     disp(' - ConZonotope OPT method');
+%     x_est_opt_con_prev_z{k} = x_est_opt_con;
+%     x_est_opt_con_prev      = x_est_opt_con;
+% 
+%     yl = {y{1}(:,k), y{2}(:,k), y{3}(:,k) }; 
+%     x_est_opt_con = intersectConZonoZono2(x_est_opt_con, C, Z_v_meas,yl,'frobenius');
+%     x_est_opt_con_z{k}  = x_est_opt_con;
+%     
+%     % propogate current state estimate 
+%     x_est_opt_con_kp1   = M_dash * (x_est_opt_con + Z_gamma) + Z_AV + Z_w;
+%     % x_est_opt_con       = x_est_opt_con_kp1;
+%     x_est_opt_con       = reduce(x_est_opt_con_kp1,'girard',5);
 
     %% INTERSECTION OF BOTH SVD and OPT METHOD
     
@@ -363,29 +367,28 @@ end
 
 figure(2);
 clf;
-bd = 14;
+bd = 25;
 xlim([-bd bd]);
 ylim([-bd bd]);
 grid on
 hold on
 
-for idx = 5
+for idx = 1:N
     % plot the true state and measurement regions
     plot(x(1,idx),x(2,idx),'k+','MarkerSize',20);
-    
     
     % ZONTOPE
 
     % METHOD 1
     % plot(x_est_svd_prev_z{idx},[1 2],'k--'); 
-    plot(x_est_svd_z{idx},[1 2],'k*-');
-    plot(x_est_svd_con_z{idx},[1 2],'m*-');  
-    
-    % METHOD 2
-    % plot the state-estimate zonotope 
-    plot(x_est_opt_z{idx},[1 2],'g--'); 
-    plot(x_est_opt_con_z{idx},[1 2],'b--');
-    
+%     plot(x_est_svd_z{idx},[1 2],'k*-');
+%     plot(x_est_svd_con_z{idx},[1 2],'m*-');  
+%     
+%     % METHOD 2
+%     % plot the state-estimate zonotope 
+%     plot(x_est_opt_z{idx},[1 2],'g--'); 
+%     plot(x_est_opt_con_z{idx},[1 2],'b--');
+%     
 %     conZon1 = x_est_svd_con_z{idx};
 %     conZon2 = x_est_opt_con_z{idx};
 %     x_inter = and(conZon1, conZon2);
@@ -404,12 +407,48 @@ for idx = 5
     y0  = x_hat(2,idx);
     ellipse(3*ra,3*rb,ang,x0,y0,'b-');
     plot(x_hat(1,idx),x_hat(2,idx),'b*');
+    
 
 %     for j = 1:q
 %         plot(Z_x_y_i{j,idx},[1 2],'r-');
 %     end
 end
 legend('x(k)','SVD','SVD CON','OPT','OPT CON','N4SID 3 std dev');
+
+%% Measure radius 
+
+% x_est_svd_radius        = zeros(1,N);
+% x_est_opt_radius        = zeros(1,N);
+% x_est_svd_con_radius    = zeros(1,N);
+% x_est_opt_con_radius    = zeros(1,N);
+% x_n4sid_max_radius      = zeros(1,N);
+% 
+% for idx = 1:N
+%     
+%     zon_to_tes = x_est_svd_z{idx};
+%     zon_to_test = zonotope([0;0], zon_to_tes.generators);
+%     
+% %     x_est_svd_radius(idx)       = norm(x_est_svd_z{idx});
+%     x_est_svd_radius(idx)       = radius(zon_to_test);
+%     x_est_opt_radius(idx)       = norm(x_est_opt_z{idx});
+% %     x_est_svd_con_radius(idx)   = volume(x_est_svd_con_z{idx});
+% %     x_est_opt_con_radius(idx)   = volume(x_est_opt_con_z{idx});
+% 
+%     [U,S,V] = svd(squeeze(P(:,:,idx)));
+%     ra = S(1,1);
+%     rb = S(2,2); 
+%     x_n4sid_max_radius(idx) = max(ra,rb);
+%     
+% end
+% 
+% figure(10);
+% clf;
+% hold on
+% grid on
+% stairs(x_est_svd_radius,'k-');
+% % stairs(x_est_opt_radius,'r');
+% stairs(x_n4sid_max_radius,'b');
+% ylim([-1 15]);
 
 %%
 
