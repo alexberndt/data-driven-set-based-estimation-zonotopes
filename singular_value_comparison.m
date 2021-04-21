@@ -72,10 +72,16 @@ bounds.n4sid.inf = zeros(1,length(input_ratios));
 bounds.zono.sup = zeros(1,length(input_ratios));
 bounds.zono.inf = zeros(1,length(input_ratios));
 
-svd_ratios = zeros(1,length(input_ratios));
+svd_cond_numbers = zeros(1,length(input_ratios));
+
+%% 
+
+input_ratios = logspace(-1,2,20);
 
 idx = 1;
 for u_multi = input_ratios
+    
+    disp(idx)
 
     % Generate training data
     for k = 1:T
@@ -119,8 +125,8 @@ for u_multi = input_ratios
                        U_minus];
 
     [~,S,~] = svd(Z_U_minus,'econ');
-    svd_ratio = S(3,3)/S(2,2);
-    svd_ratios(idx) = svd_ratio;
+    cond_number = S(1,1)/S(3,3)
+    svd_cond_numbers(idx) = cond_number;
 
     % construct M_v - matrix zonotope of measurement noise
     C_gam         = repmat(Z_gamma.center,1,T-1); %zeros(2,T-1);
@@ -214,7 +220,7 @@ for u_multi = input_ratios
     bounds.n4sid.inf(idx)   = i_n4sid.inf(1);
     bounds.zono.sup(idx)    = i_zon_AV.sup(1);
     bounds.zono.inf(idx)    = i_zon_AV.inf(1);
-    idx = idx + 1
+    idx = idx + 1;
 end
 
 % if useRandPointExtreme
@@ -223,32 +229,34 @@ end
 %     samplemethod = "RandPoint";
 % end
 
+%%
+
 % plot the results
 gcf = figure();
 clf;
 
-h1 = semilogx(svd_ratios,bounds.true.sup,'k-');
+h1 = semilogx(svd_cond_numbers,bounds.true.sup,'k-');
 hold on
-h2 = semilogx(svd_ratios,bounds.true.inf,'k-');
-
-h3 = semilogx(svd_ratios,bounds.n4sid.sup,'b-');
-h4 = semilogx(svd_ratios,bounds.n4sid.inf,'b-');
-
-h5 = semilogx(svd_ratios,bounds.zono.sup,'m-');
-h6 = semilogx(svd_ratios,bounds.zono.inf,'m-');
+h2 = semilogx(svd_cond_numbers,bounds.true.inf,'k-');
+% 
+h3 = semilogx(svd_cond_numbers,bounds.n4sid.sup,'b-');
+h4 = semilogx(svd_cond_numbers,bounds.n4sid.inf,'b-');
+% 
+h5 = semilogx(svd_cond_numbers,bounds.zono.sup,'m-');
+h6 = semilogx(svd_cond_numbers,bounds.zono.inf,'m-');
 
 grid on
 % set(gcf, 'XScale', 'log');
 
-xlabel("singular value ratio = (last singular value)/(second-to-last singular value)",'Interpreter','latex');
-ylabel("min-max bounds of $\mathcal{X}_{k+1}$",'Interpreter','latex');
+xlabel("Condition number $\kappa$",'Interpreter','latex');
+ylabel("bounds of $\mathcal{X}_{k+1}$ on $x_1$",'Interpreter','latex');
 % xlim([-16 -5]);
 % ylim([-2 12]);
 % title("$c_w$ = " + c_w + ", $c_{\gamma}$ = " + c_gam + ", $T$ = " + T + ", bias $c_w$ = " + cw_offset + ", bias $c_\gamma$ = " + cgam_offset,'Interpreter','latex'); %+ ", ExtremeSampling = " + num2str(useRandPointExtreme)
 % title("$c_w$ = " + c_w + ", $c_{\gamma}$ = " + c_gam + ", $T$ = " + T + ", svd ratio = " + svd_ratio,'Interpreter','latex'); %+ ", ExtremeSampling = " + num2str(useRandPointExtreme)
 
 title("$T$ = " + T,'Interpreter','latex');
-
+xlim([0.9 cond_number]);
 hleglines = [h1(1) h3(1) h5(1)];
 legend(hleglines,'True','N4SID','Mat Zon'); %,'M dash','M Sigma');
 
@@ -260,7 +268,7 @@ height = 200;
 set(gcf,'units','points','position',[x0,y0,width,height])
 
 save_loc = '/home/alberndt/Documents/research/data_driven/berndt2020zonotope_analysis/figures/';
-fig_name = strrep(strcat('res_svd_T_',num2str(T),'_svdratiorange_',num2str(min(svd_ratios)),'_to_',num2str(max(svd_ratios))),'.','_');
+fig_name = strrep(strcat('res_svd_T_',num2str(T),'_svdcondnumber_',num2str(min(svd_cond_numbers)),'_to_',num2str(max(svd_cond_numbers))),'.','_');
 fig_name = strcat(fig_name, '.eps');
 
 saveas(gcf,strcat(save_loc,fig_name), 'epsc')

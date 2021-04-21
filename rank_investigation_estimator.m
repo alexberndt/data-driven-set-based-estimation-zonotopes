@@ -20,7 +20,7 @@
 clc
 clear
 cd '/home/alberndt/Documents/research/data_driven/code/data_driven_set_based_estimation_zonotopes'
-rng("default");
+rng(2);
 addpath('./functions/');
 
 % Training phase
@@ -122,11 +122,11 @@ end
 %%
 
 u_bounds = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0];
-u_bounds = logspace(-2,0.1,20);
+u_bounds = logspace(-2,0.8,20);
 % u_bounds = [0.01, 0.5, 2.0, 5.0];
 
 u_bnds_len = length(u_bounds);
-svd_ratios = zeros(1,u_bnds_len);
+svd_cond_numbers = zeros(1,u_bnds_len);
 results = struct();
 results.true = cell(1,u_bnds_len);
 results.svd = cell(1,u_bnds_len);
@@ -185,9 +185,9 @@ for u_bnd = u_bounds
                        U_minus];
 
     [~,S,~] = svd(Z_U_minus,'econ');
-    svd_ratio = S(3,3)/S(2,2);
-    svd_ratios(u_idx) = svd_ratio;
-    disp("  - svd_ratio: " + num2str(svd_ratio));
+    svd_cond_number = S(1,1)/S(3,3);
+    svd_cond_numbers(u_idx) = svd_cond_number;
+    disp("  - svd_ratio: " + num2str(svd_cond_number));
 
     % construct M_v - matrix zonotope of measurement noise
     C_gam         = repmat(Z_gamma.center,1,T-1); %zeros(2,T-1);
@@ -352,15 +352,15 @@ for u_bnd = u_bounds
 
     resuts.true{u_idx} = x_est(:,N);
     
-    if u_idx == 5
-       figure(9);
-       hold on
-       plot(x_est(1,k),x_est(2,k),'k*');
-       plot(x_est_svd_z{N},[1 2],'b-');
-       plot(x_est_opt_z{N},[1 2],'g-');
-       plot(x_est_svd_con_z{N},[1 2],'r-');
-       plot(x_est_opt_con_z{N},[1 2],'m-');
-    end
+%     if u_idx == 5
+%        figure(9);
+%        hold on
+%        plot(x_est(1,k),x_est(2,k),'k*');
+%        plot(x_est_svd_z{N},[1 2],'b-');
+%        plot(x_est_opt_z{N},[1 2],'g-');
+%        plot(x_est_svd_con_z{N},[1 2],'r-');
+%        plot(x_est_opt_con_z{N},[1 2],'m-');
+%     end
     
     u_idx = u_idx + 1;
     
@@ -421,26 +421,36 @@ for u_bnd = u_bounds
     u_idx = u_idx + 1;
 end 
 
-figure(1);
+gcf1 = figure(1);
 clf;
-h1 = semilogx(svd_ratios, bounds.true, 'k*-');
+h1 = semilogx(svd_cond_numbers, bounds.true, 'k+');
 hold on
 
-h2  = semilogx(svd_ratios, bounds.svd.sup, 'b+-');
-h2b = semilogx(svd_ratios, bounds.svd.inf, 'b+-');
+h2  = semilogx(svd_cond_numbers, bounds.svd.sup, 'k*-');
+h2b = semilogx(svd_cond_numbers, bounds.svd.inf, 'k*-');
 
-h3  = semilogx(svd_ratios, bounds.svdc.sup, 'r+-');
-h3b = semilogx(svd_ratios, bounds.svdc.inf, 'r+-');
+h3  = semilogx(svd_cond_numbers, bounds.svdc.sup, 'm*-');
+h3b = semilogx(svd_cond_numbers, bounds.svdc.inf, 'm*-');
 
-h4  = semilogx(svd_ratios, bounds.opt.sup, 'g+-');
-h4b = semilogx(svd_ratios, bounds.opt.inf, 'g+-');
+h4  = semilogx(svd_cond_numbers, bounds.opt.sup, 'g--');
+h4b = semilogx(svd_cond_numbers, bounds.opt.inf, 'g--');
 
-h5  = semilogx(svd_ratios, bounds.optc.sup, 'm+-');
-h5b = semilogx(svd_ratios, bounds.optc.inf, 'm+-');
+h5  = semilogx(svd_cond_numbers, bounds.optc.sup, 'b--');
+h5b = semilogx(svd_cond_numbers, bounds.optc.inf, 'b--');
 
-xlabel("singular value ratio");
+xlim([0.2, max(svd_cond_numbers)]);
+ylim([-23, 15]);
+
+xlabel("Condition number $\kappa$",'Interpreter','latex');
+ylabel("bounds of $\hat{\mathcal{R}}_{3}$ on $x_1$",'Interpreter','latex');
+x0 = 10;
+y0 = 10;
+width = 450;
+height = 220;
+
+set(gcf1,'units','points','position',[x0,y0,width,height])
 grid on
-legend([h1,h2,h3,h4,h5],'true','Method 1','Method 1 CON','Method 2','Method 2 CON');
+legend([h1,h2,h3,h4,h5],'True','Approach 1','Approach 1 CZ','Approach 2','Approach 2 CZ','Location','northwest','Interpreter','latex');
 
 
 
