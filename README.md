@@ -10,11 +10,18 @@ We propose a method to perform set-based state estimation of an unknown dynamica
 
 ## Get Started
 
-The main code can be found in
-```
-set_based_estimator.m
-```
-
-## Dependencies
+### Dependencies
 
 The code requires the installation of the [CORA MATLAB toolbox](https://tumcps.github.io/CORA/)
+
+### File Descriptions
+
+The main code used throughout the [manuscript](https://arxiv.org/abs/2101.10784) can be found in
+```
+estimator_simulation.m
+```
+The comparison of singular values as in Fig. 4 of the [manuscript](https://arxiv.org/abs/2101.10784) can be found in 
+```
+singular_value_comparison.m
+```
+
