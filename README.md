@@ -20,10 +20,6 @@ The main code used throughout the [manuscript](https://arxiv.org/abs/2101.10784)
 ```
 estimator_simulation.m
 ```
-The comparison of singular values as in Fig. 4 of the [manuscript](https://arxiv.org/abs/2101.10784) can be found in 
-```
-singular_value_comparison.m
-```
 
 ## Reference 
 
