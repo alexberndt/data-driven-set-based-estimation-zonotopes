@@ -125,7 +125,7 @@ for ii=1:length(Z_v)
     p = C_sizes{ii};
     part1 = part1 - lambda(:,ii:(ii+p-1))*Cl{ii};
     G_v_i = Z_v{ii}.generators;
-    part2(:,ii:(ii+p-1)) = G_v_i*lambda(:,ii:(ii+p-1));
+    part2(:,ii:(ii+p-1)) = - G_v_i*lambda(:,ii:(ii+p-1));
 end
 
 part1 = part1 * H;
@@ -140,7 +140,7 @@ Zres = zonotope([c_new H_new]);
             p = C_sizes{ii};
             part1 = part1 - lambda(:,ii:(ii+p-1))*Cl{ii};
             G_v_i = Z_v{ii}.generators;
-            part2(:,ii:(ii+p-1)) = G_v_i*lambda(:,ii:(ii+p-1));
+            part2(:,ii:(ii+p-1)) = - G_v_i*lambda(:,ii:(ii+p-1));
         end
         part1 = part1 * H;
         H_new = [part1 part2];

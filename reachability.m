@@ -21,7 +21,7 @@
 %% Training phase to identify the system
 clc
 clear
-cd '/home/alberndt/Documents/research/data_driven/code/data_driven_set_based_estimation_zonotopes'
+%cd '/home/alberndt/Documents/research/data_driven/code/data_driven_set_based_estimation_zonotopes'
 rng("default");
 addpath('./functions/');
 

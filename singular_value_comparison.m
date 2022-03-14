@@ -21,9 +21,9 @@
 %% Training phase to identify the system
 clc
 clear
-cd '/home/alberndt/Documents/research/data_driven/code/data_driven_set_based_estimation_zonotopes'
-rng("default");
-addpath('./functions/');
+% cd '/home/alberndt/Documents/research/data_driven/code/data_driven_set_based_estimation_zonotopes'
+% rng("default");
+% addpath('./functions/');
 
 % Training phase
 
@@ -267,9 +267,9 @@ height = 200;
 
 set(gcf,'units','points','position',[x0,y0,width,height])
 
-save_loc = '/home/alberndt/Documents/research/data_driven/berndt2020zonotope_analysis/figures/';
-fig_name = strrep(strcat('res_svd_T_',num2str(T),'_svdcondnumber_',num2str(min(svd_cond_numbers)),'_to_',num2str(max(svd_cond_numbers))),'.','_');
-fig_name = strcat(fig_name, '.eps');
-
-saveas(gcf,strcat(save_loc,fig_name), 'epsc')
+%save_loc = '/home/alberndt/Documents/research/data_driven/berndt2020zonotope_analysis/figures/';
+% fig_name = strrep(strcat('res_svd_T_',num2str(T),'_svdcondnumber_',num2str(min(svd_cond_numbers)),'_to_',num2str(max(svd_cond_numbers))),'.','_');
+% fig_name = strcat(fig_name, '.eps');
+% 
+% saveas(gcf,strcat(save_loc,fig_name), 'epsc')
 

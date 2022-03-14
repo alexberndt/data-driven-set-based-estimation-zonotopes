@@ -13,15 +13,15 @@
 %   
 %   and adhere to the data 
 %
-% author:  Alexander Berndt
-% contact: alberndt@kth.se
+% author:  Alexander Berndt, Amr Alanwar
+% contact: alberndt@kth.se, amr.alanwar@gmail.com
 %
 %% Training phase to identify the system
 clc
 clear
-cd '/home/alberndt/Documents/research/data_driven/code/data_driven_set_based_estimation_zonotopes'
-rng(1);
-addpath('./functions/');
+% cd '/home/alberndt/Documents/research/data_driven/code/data_driven_set_based_estimation_zonotopes'
+% rng(1);
+% addpath('./functions/');
 
 % Training phase
 
@@ -31,14 +31,33 @@ A_true  = [0.9455   -0.2426;
 B_true  = [0.1; 0];
 T       = 100;
 Ts      = 1.0;
+N   = 50;
+nx  = 2;
+nu  = 1;
+q   = 3;
 
-ctrb(A_true,B_true)
+% define observability matrices
+C       = cell(1,q);
+C{1}    = [1 0.4];
+C{2}    = [0.9 -1.2];
+C{3}    = [-0.8 0.2;
+           0    0.7];
+% define bounds on v(k) using zonotopes
+c_v_meas     = cell(1,q);
+c_v_meas{1}  = 1.0;
+c_v_meas{2}  = 1.0;
+c_v_meas{3}  = 1.0;
+
+Z_v_meas     = cell(1,q);
+Z_v_meas{1}  = zonotope(0,c_v_meas{1});
+Z_v_meas{2}  = zonotope(0,c_v_meas{2});
+Z_v_meas{3}  = zonotope([0;0],diag([c_v_meas{3},c_v_meas{3}]));
 
 useRandPointExtreme = false;
 
 % Init matrices
 x       = zeros(2,T+1);
-z       = zeros(2,T);
+%z       = zeros(2,T);
 t       = zeros(1,T+1);
 gam     = zeros(2,T);
 w       = zeros(2,T);
@@ -72,12 +91,16 @@ for k = 1:T
     end
     % system evolution
     x(:,k+1)    = A_true*x(:,k) + B_true*u(k) + w(:,k);
-    z(:,k)      = x(:,k) + gam(:,k);
+    for i = 1:q
+        % v{i}(k) = randPoint(Z_v_meas{i});
+        z{i}(:,k) = C{i}*x(:,k) + randPoint(Z_v_meas{i});
+    end
+    z_ssyid(:,k)      = x(:,k) + gam(:,k);
     t(k+1)      = t(k) + Ts;
 end
 
 % N4SID model
-sysid_data = iddata(z',u',Ts);
+sysid_data = iddata(z_ssyid',u',Ts);
 m = n4sid(sysid_data,2,'ssp','can'); % canonical form for C = eye(2)
 [pvec,pvec_sd] = getpvec(m);
 
@@ -92,27 +115,32 @@ z_start = zonotope(x_start,[0.1 0 0.04; 0 0.1 -0.12]);
 
 % Matrix zonotope identification
 U_minus         = u(1:T-1);
-Z_minus         = z(:,1:T-1);
-Z_plus          = z(:,2:T);
-
-Z_U_minus       = [Z_minus;
+for i = 1:q
+Z_minus{i}         = z{i}(:,1:T-1);
+Z_plus{i}          = z{i}(:,2:T);
+Z_U_minus{i}       = [Z_minus{i};
                    U_minus];
+end
+
                
-[~,S,~] = svd(Z_U_minus,'econ');
-svd_ratio = S(3,3)/S(2,2)
+% [~,S,~] = svd(Z_U_minus,'econ');
+% svd_ratio = S(3,3)/S(2,2)
 
 % construct M_v - matrix zonotope of measurement noise
-C_gam         = repmat(Z_gamma.center,1,T-1); %zeros(2,T-1);
-G_gam         = cell(1,2*(T-1));
-Gen_gam     = Z_gamma.generators;
-for i = 1:T-1
-    G_gam{i}            = zeros(2,T-1);
-    G_gam{i}(:,i)       = Gen_gam(:,1); 
-    G_gam{i+T-1}        = zeros(2,T-1);
-    G_gam{i+T-1}(:,i)   = Gen_gam(:,2);
+for j=1:q
+    C_gam         = repmat(Z_v_meas{j}.center,1,T-1); %zeros(2,T-1);
+    G_gam = {};
+    Gen_gam     = Z_v_meas{j}.generators;
+    for i = 1:T-1
+        G_gam{i}            = zeros(length(Z_v_meas{j}.center),T-1);
+        G_gam{i}(:,i)       = Gen_gam(:,1);
+        if size(Gen_gam,2)==2
+        G_gam{i+T-1}        = zeros(length(Z_v_meas{j}.center),T-1);
+        G_gam{i+T-1}(:,i)   = Gen_gam(:,2);
+        end
+    end
+    M_gamma{j}         = matZonotope(C_gam,G_gam);
 end
-M_gamma         = matZonotope(C_gam,G_gam);
-
 % construct M_w - matrix zonotope of process noise
 C_w         = repmat(Z_w.center,1,T-1);
 G_w         = cell(1,2*(T-1));
@@ -126,21 +154,39 @@ end
 M_w         = matZonotope(C_w,G_w);
 
 % determine propogations matrices
-M_dash      = (Z_plus - C_gam - C_w)*pinv(Z_U_minus);
-M_AV        = Z_plus - M_dash*Z_U_minus + (-1)*M_gamma + (-1)*M_w;
-Int_Mat_AV  = intervalMatrix(M_AV);
-M_v_sup     = Int_Mat_AV.Sup;
-M_v_inf     = Int_Mat_AV.Inf;
-Z_max       = max(M_v_sup,[],2);
-Z_min       = min(M_v_inf,[],2);
-Z_AV        = zonotope(interval(Z_min, Z_max));
+% M_dash      = (Z_plus - C_gam - C_w)*pinv(Z_U_minus);
+% M_AV        = Z_plus - M_dash*Z_U_minus + (-1)*M_gamma + (-1)*M_w;
+% Int_Mat_AV  = intervalMatrix(M_AV);
+% M_v_sup     = Int_Mat_AV.Sup;
+% M_v_inf     = Int_Mat_AV.Inf;
+% Z_max       = max(M_v_sup,[],2);
+% Z_min       = min(M_v_inf,[],2);
+% Z_AV        = zonotope(interval(Z_min, Z_max));
+% 
+% M_dash_A = M_dash(:,1:2);
+% M_dash_B = M_dash(:,3);
+% 
+% % determine M_Sigma using AV bound assumption
+% M_Sigma = (Z_plus + (-1)*M_gamma + A_true*M_gamma + (-1)*M_w)*pinv(Z_U_minus);
+for i = 1:q
+Z_plus_zono{i} = measurement_zonotope_matzono(Z_plus{i},C{i},M_gamma{i});
+end
 
-M_dash_A = M_dash(:,1:2);
-M_dash_B = M_dash(:,3);
+for i = 1:q
+Z_minus_zono{i} = measurement_zonotope_matzono(Z_minus{i},C{i},M_gamma{i});
+end
 
-% determine M_Sigma using AV bound assumption
-M_Sigma = (Z_plus + (-1)*M_gamma + A_true*M_gamma + (-1)*M_w)*pinv(Z_U_minus);
+selectedNode =1;
+XU_cent = [Z_minus_zono{selectedNode}.center; U_minus];
+for i =1:length(Z_minus_zono{selectedNode}.generator)
+   XU_gen{i} =  [Z_minus_zono{selectedNode}.generator{i};zeros(size(U_minus))];
+end
+XU_matzono = intervalMatrix(matZonotope(XU_cent,XU_gen));
+M_Sigma = intervalMatrix((Z_plus_zono{selectedNode} + (-1)*M_w))*invIntMatrixAutoRinv(XU_matzono);
 
+intAB1 = M_Sigma.int;
+intAB1.sup >= [A_true,B_true]
+intAB1.inf <= [A_true,B_true]
 % % plot the results
 % figure(1);
 % clf;
@@ -200,27 +246,7 @@ M_Sigma = (Z_plus + (-1)*M_gamma + A_true*M_gamma + (-1)*M_w)*pinv(Z_U_minus);
 
 %% Run set-based observer
 
-N   = 50;
-nx  = 2;
-nu  = 1;
-q   = 3;
 
-% define observability matrices
-C       = cell(1,q);
-C{1}    = [1 0.4];
-C{2}    = [0.9 -1.2];
-C{3}    = [-0.8 0.2;
-           0    0.7];
-% define bounds on v(k) using zonotopes
-c_v_meas     = cell(1,q);
-c_v_meas{1}  = 1.0;
-c_v_meas{2}  = 1.0;
-c_v_meas{3}  = 1.0;
-
-Z_v_meas     = cell(1,q);
-Z_v_meas{1}  = zonotope(0,c_v_meas{1});
-Z_v_meas{2}  = zonotope(0,c_v_meas{2});
-Z_v_meas{3}  = zonotope([0;0],blkdiag(c_v_meas{3},c_v_meas{3}));
 % Z_v_meas{4}  = zonotope(2,c_v_meas{4});
 
 x       = zeros(nx,N+1);
@@ -368,7 +394,7 @@ for k = 1:N
     x_est_svd_con_z{k}  = x_est_svd_con;
 
     % x_est_svd_con_kp1   = M_dash * (x_est_svd_con + Z_gamma) + Z_AV + Z_w;
-    x_est_svd_con_kp1   = M_Sigma*cartProd(x_est_svd_con,u_zon) + Z_w;
+    x_est_svd_con_kp1   = M_Sigma*zonotope(cartProd(x_est_svd_con,u_zon)) + Z_w;
     x_est_svd_con       = reduce(x_est_svd_con_kp1,'girard',5);
     comp_times.svdc(k) = toc;
     
@@ -400,12 +426,12 @@ for k = 1:N
     end
 
     yl = {y{1}(:,k), y{2}(:,k), y{3}(:,k) }; 
-    x_est_opt_con = intersectConZonoZono2(x_est_opt_con, C, Z_v_meas,yl,'frobenius');
+    x_est_opt_con = intersectConZonoZono2(conZonotope(x_est_opt_con), C, Z_v_meas,yl,'frobenius');
     x_est_opt_con_z{k}  = x_est_opt_con;
     
     % propogate current state estimate 
     % x_est_opt_con_kp1   = M_dash * (x_est_opt_con + Z_gamma) + Z_AV + Z_w;
-    x_est_opt_con_kp1   = M_Sigma*cartProd(x_est_opt_con,u_zon)  + Z_w;
+    x_est_opt_con_kp1   = M_Sigma*zonotope(cartProd(x_est_opt_con,u_zon))  + Z_w;
     
     % x_est_opt_con       = x_est_opt_con_kp1;
     x_est_opt_con       = reduce(x_est_opt_con_kp1,'girard',5);
@@ -471,7 +497,7 @@ mean(comp_times.optc)
 
 %%
 
-gcf2 = figure(2);
+gcf2 = figure('Renderer', 'painters', 'Position', [10 10 700 700]);
 clf;
 bd = 25;
 % xlim([-bd bd]);
@@ -515,7 +541,7 @@ for idx = 34
     x0  = x_hat(1,idx);
     y0  = x_hat(2,idx);
     ellipse(3*ra,3*rb,ang,x0,y0,'b-');
-    plot(x_hat(1,idx),x_hat(2,idx),'b*');
+  %  plot(x_hat(1,idx),x_hat(2,idx),'b*');
     
     % ESTIMATE ZONOTOPES    
     % for j = 1:q
@@ -527,193 +553,177 @@ y0 = 300;
 width = 450;
 height = 150;
 
-xlim([0.5 6.5]);
-ylim([-7, -3]);
+%xlim([3.5 7]);
+%ylim([-5.5, -2]);
 % xlim([-10 10]);
 % ylim([-14 0]);
 xlabel('$x_1$','Interpreter','latex');
 ylabel('$x_2$','Interpreter','latex');
+warOrig = warning; warning('off','all');
+%set(gcf2,'units','points','position',[x0,y0,width,height])
 
-set(gcf2,'units','points','position',[x0,y0,width,height])
 legend('$x(k)$','Approach 1','Approach 1 CZ','Approach 2','Approach 2 CZ','KF $3\sigma$ bounds','Interpreter','latex');
-
+   box on
+warning(warOrig);
+    ax = gca;
+    ax.FontSize = 18;
+    %set(gcf, 'Position',  [50, 50, 800, 400])
+    ax = gca;
+    outerpos = ax.OuterPosition;
+    ti = ax.TightInset;
+    left = outerpos(1) + ti(1);
+    bottom = outerpos(2) + ti(2);
+    ax_width = outerpos(3) - ti(1) - ti(3)-0.01;
+    ax_height = outerpos(4) - ti(2) - ti(4);
+    ax.Position = [left bottom ax_width ax_height];
 %% Measure radius 
 % 
-% coord = 1; % or 2 for x_1 or x_2 comparison
-% 
-% bounds = struct();
-% bounds.true      = zeros(1,N);
-% bounds.n4sid.sup = zeros(1,N);
-% bounds.n4sid.inf = zeros(1,N);
-% bounds.svd.sup   = zeros(1,N);
-% bounds.svd.inf   = zeros(1,N);
-% bounds.svdc.sup  = zeros(1,N);
-% bounds.svdc.inf  = zeros(1,N);
-% bounds.opt.sup   = zeros(1,N);
-% bounds.opt.inf   = zeros(1,N);
-% bounds.optc.sup  = zeros(1,N);
-% bounds.optc.inf  = zeros(1,N);
-% 
-% for idx = 1:N
-%     % plot the true state and measurement regions
-%     % plot(x(1,idx),x(2,idx),'k+','MarkerSize',20);
-%     
-%     bounds.true(idx) = x(coord,idx);
-%     
-%     % ZONOTOPE
-% 
-%     % METHOD 1    
-%     int_svd     = interval(x_est_svd_prev_z{idx});
-%     bounds.svd.sup(idx) = int_svd.sup(coord);
-%     bounds.svd.inf(idx) = int_svd.inf(coord);
-%     
-%     int_svdc    = interval(x_est_svd_con_prev_z{idx});
-%     bounds.svdc.sup(idx) = int_svdc.sup(coord);
-%     bounds.svdc.inf(idx) = int_svdc.inf(coord);
-%     
-%     % METHOD 2    
-%     int_opt     = interval(x_est_opt_prev_z{idx});
-%     bounds.opt.sup(idx) = int_opt.sup(coord);
-%     bounds.opt.inf(idx) = int_opt.inf(coord);
-%     
-%     int_optc    = interval(x_est_opt_con_prev_z{idx});
-%     bounds.optc.sup(idx) = int_optc.sup(coord);
-%     bounds.optc.inf(idx) = int_optc.inf(coord);
-%   
-%     % KALMAN FILTER N4SID 3
-%     [U,S,V] = svd(squeeze(P(:,:,idx)));
-%     angle_vec = U(:,1);
-%     angle = atan2(angle_vec(2),angle_vec(1));
-%     ra = S(1,1);
-%     rb = S(2,2); 
-%     ang = angle; 
-%     x0  = x_hat(1,idx);
-%     y0  = x_hat(2,idx);
-% end 
-% %%
-% gcf6 = figure(6);
-% clf;
-% hold on
-% grid on
-% 
+coord = 1; % or 2 for x_1 or x_2 comparison
+
+bounds = struct();
+bounds.true      = zeros(1,N);
+bounds.n4sid.sup = zeros(1,N);
+bounds.n4sid.inf = zeros(1,N);
+bounds.svd.sup   = zeros(1,N);
+bounds.svd.inf   = zeros(1,N);
+bounds.svdc.sup  = zeros(1,N);
+bounds.svdc.inf  = zeros(1,N);
+bounds.opt.sup   = zeros(1,N);
+bounds.opt.inf   = zeros(1,N);
+bounds.optc.sup  = zeros(1,N);
+bounds.optc.inf  = zeros(1,N);
+
+for idx = 1:N
+    % plot the true state and measurement regions
+    % plot(x(1,idx),x(2,idx),'k+','MarkerSize',20);
+    
+    bounds.true(idx) = x(coord,idx);
+    
+    % ZONOTOPE
+
+    % METHOD 1    
+    %int_svd     = interval(x_est_svd_prev_z{idx});
+    int_svd     = interval(x_est_svd_z{idx});
+    bounds.svd.sup(idx) = int_svd.sup(coord);
+    bounds.svd.inf(idx) = int_svd.inf(coord);
+    
+    %int_svdc    = interval(x_est_svd_con_prev_z{idx});
+    int_svdc    = interval(x_est_svd_con_z{idx});
+    bounds.svdc.sup(idx) = int_svdc.sup(coord);
+    bounds.svdc.inf(idx) = int_svdc.inf(coord);
+    
+    % METHOD 2    
+    %int_opt     = interval(x_est_opt_prev_z{idx});
+    int_opt     = interval(x_est_opt_z{idx});
+    bounds.opt.sup(idx) = int_opt.sup(coord);
+    bounds.opt.inf(idx) = int_opt.inf(coord);
+    
+    %int_optc    = interval(x_est_opt_con_prev_z{idx});
+    int_optc    = interval(x_est_opt_con_z{idx});
+    bounds.optc.sup(idx) = int_optc.sup(coord);
+    bounds.optc.inf(idx) = int_optc.inf(coord);
+  
+    % KALMAN FILTER N4SID 3
+    [U,S,V] = svd(squeeze(P(:,:,idx)));
+    angle_vec = U(:,1);
+    angle = atan2(angle_vec(2),angle_vec(1));
+    ra = S(1,1);
+    rb = S(2,2); 
+    ang = angle; 
+    x0  = x_hat(1,idx);
+    y0  = x_hat(2,idx);
+end 
+%%
+gcf6 = figure('Renderer', 'painters', 'Position', [10 10 700 300]);;
+clf;
+hold on
+grid on
+
+h1 = plot(t(1:N),bounds.svdc.sup,'b-');
+h2 = plot(t(1:N),bounds.svdc.inf,'b-');
+
+% h3 = plot(t(1:N),bounds.svd.sup,'g-');
+% h4 = plot(t(1:N),bounds.svd.inf,'g-');
+
+h5 = plot(t(1:N),bounds.optc.sup,'m--');
+h6 = plot(t(1:N),bounds.optc.inf,'m--');
+
+% h7 = plot(t(1:N),bounds.opt.sup,'r-');
+% h8 = plot(t(1:N),bounds.opt.inf,'r-');
+
+h9 = plot(t(1:N),bounds.true,'k-.','Linewidth',2);
+
+xlabel("time step $k$",'Interpreter','latex');
+ylabel("$x_1$",'Interpreter','latex');
+
+hlegend = [h9,h1,h5];
+x0 = 10;
+y0 = 10;
+width = 450;
+height = 150;
+
+%ylim([-15 15]);
+
+%set(gcf6,'units','points','position',[x0,y0,width,height])
+legend(hlegend,'$x(k)$','Approach 1 CZ','Approach 2 CZ','Location','southeast','Interpreter','latex');
+   box on
+warning(warOrig);
+    ax = gca;
+    ax.FontSize = 18;
+    %set(gcf, 'Position',  [50, 50, 800, 400])
+    ax = gca;
+    outerpos = ax.OuterPosition;
+    ti = ax.TightInset;
+    left = outerpos(1) + ti(1);
+    bottom = outerpos(2) + ti(2);
+    ax_width = outerpos(3) - ti(1) - ti(3)-0.01;
+    ax_height = outerpos(4) - ti(2) - ti(4);
+    ax.Position = [left bottom ax_width ax_height];
+
+%%
+gcf7 = figure('Renderer', 'painters', 'Position', [10 10 700 300]);;
+clf;
+hold on
+grid on
+
 % h1 = plot(t(1:N),bounds.svdc.sup,'b-');
 % h2 = plot(t(1:N),bounds.svdc.inf,'b-');
-% 
-% % h3 = plot(t(1:N),bounds.svd.sup,'g-');
-% % h4 = plot(t(1:N),bounds.svd.inf,'g-');
-% 
+
+h3 = plot(t(1:N),bounds.svd.sup,'b-');
+h4 = plot(t(1:N),bounds.svd.inf,'b-');
+
 % h5 = plot(t(1:N),bounds.optc.sup,'m--');
 % h6 = plot(t(1:N),bounds.optc.inf,'m--');
-% 
-% % h7 = plot(t(1:N),bounds.opt.sup,'r-');
-% % h8 = plot(t(1:N),bounds.opt.inf,'r-');
-% 
-% h9 = plot(t(1:N),bounds.true,'k-.','Linewidth',2);
-% 
-% xlabel("time step k",'Interpreter','latex');
-% ylabel("$x_1$",'Interpreter','latex');
-% 
-% hlegend = [h9,h1,h5];
-% x0 = 10;
-% y0 = 10;
-% width = 450;
-% height = 150;
-% 
-% ylim([-15 15]);
-% 
-% set(gcf6,'units','points','position',[x0,y0,width,height])
-% legend(hlegend,'x(k)','Method 1 CON','Method 2 CON','Location','southeast','Interpreter','latex');
-% 
-% 
-% %%
-% gcf7 = figure(7);
-% clf;
-% hold on
-% grid on
-% 
-% % h1 = plot(t(1:N),bounds.svdc.sup,'b-');
-% % h2 = plot(t(1:N),bounds.svdc.inf,'b-');
-% 
-% h3 = plot(t(1:N),bounds.svd.sup,'b-');
-% h4 = plot(t(1:N),bounds.svd.inf,'b-');
-% 
-% % h5 = plot(t(1:N),bounds.optc.sup,'m--');
-% % h6 = plot(t(1:N),bounds.optc.inf,'m--');
-% 
-% h7 = plot(t(1:N),bounds.opt.sup,'m--');
-% h8 = plot(t(1:N),bounds.opt.inf,'m--');
-% 
-% h9 = plot(t(1:N),bounds.true,'k-.','Linewidth',2);
-% 
-% xlabel("time step k",'Interpreter','latex');
-% ylabel("$x_1$",'Interpreter','latex');
-% 
-% hlegend = [h9,h3,h7];
-% x0 = 10;
-% y0 = 10;
-% width = 450;
-% height = 150;
-% 
-% ylim([-14.8 15.2]);
-% 
-% set(gcf7,'units','points','position',[x0,y0,width,height])
-% legend(hlegend,'x(k)','Method 1','Method 2','Location','southeast','Interpreter','latex');
 
+h7 = plot(t(1:N),bounds.opt.sup,'m--');
+h8 = plot(t(1:N),bounds.opt.inf,'m--');
 
+h9 = plot(t(1:N),bounds.true,'k-.','Linewidth',2);
 
+xlabel("time step $k$",'Interpreter','latex');
+ylabel("$x_1$",'Interpreter','latex');
 
+hlegend = [h9,h3,h7];
+x0 = 10;
+y0 = 10;
+width = 450;
+height = 150;
 
+%ylim([-14.8 15.2]);
 
+%set(gcf7,'units','points','position',[x0,y0,width,height])
+legend(hlegend,'$x(k)$','Approach 1','Approach 2','Location','southeast','Interpreter','latex');
+   box on
+warning(warOrig);
+    ax = gca;
+    ax.FontSize = 18;
+    %set(gcf, 'Position',  [50, 50, 800, 400])
+    ax = gca;
+    outerpos = ax.OuterPosition;
+    ti = ax.TightInset;
+    left = outerpos(1) + ti(1);
+    bottom = outerpos(2) + ti(2);
+    ax_width = outerpos(3) - ti(1) - ti(3)-0.01;
+    ax_height = outerpos(4) - ti(2) - ti(4);
+    ax.Position = [left bottom ax_width ax_height];
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-%.

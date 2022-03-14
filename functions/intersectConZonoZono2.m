@@ -47,7 +47,7 @@ function conZres = intersectConZonoZono2(z1,Cl,Z_v,yl,method)
         
         G_v_i = Z_v{idx}.generators;
         
-        RHS(:, p_so_far : (p_so_far+p-1) ) = lambda( :, p_so_far: (p_so_far+p-1) ) * G_v_i;
+        RHS(:, p_so_far : (p_so_far+p-1) ) =- lambda( :, p_so_far: (p_so_far+p-1) ) * G_v_i;
         p_so_far = p_so_far + p;
     end
 
@@ -108,7 +108,7 @@ function conZres = intersectConZonoZono2(z1,Cl,Z_v,yl,method)
         j_s = current_A_size + 1 + p_so_far;
         j_f = current_A_size + 1 + p_so_far + p - 1;
         Abar_k( j_s:j_f, 1:width_G ) = Cl{i}*G_k;
-        Abar_k( j_s:j_f, width_G + width_so_far + 1 : width_G + width_so_far + size(Z_v{i}.generators,2) ) = -Z_v{i}.generators;
+        Abar_k( j_s:j_f, width_G + width_so_far + 1 : width_G + width_so_far + size(Z_v{i}.generators,2) ) = Z_v{i}.generators;
 
         width_so_far = width_so_far + size(Z_v{i}.generators,2);
 
