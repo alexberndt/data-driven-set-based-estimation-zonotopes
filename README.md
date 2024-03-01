@@ -4,7 +4,7 @@ by Alexander Berndt, Amr Alanwar, Karl Henrik Johansson and Henrik Sandberg
 
 Manuscript: [Data-Driven Set-Based Estimation using Matrix Zonotopes with Set Containment Guarantees](https://arxiv.org/abs/2101.10784) 
 
-# ECC 2022
+# ECC 2022 talk
 [![ECC 2022](https://img.youtube.com/vi/r9xfmMkwIMs/0.jpg)](https://www.youtube.com/watch?v=r9xfmMkwIMs)
 
 
